@@ -1,9 +1,11 @@
 const canvas = document.getElementById("game");
 const scoreEl = document.getElementById("score");
 const bestEl = document.getElementById("best");
+const levelEl = document.getElementById("level");
 const fuelEl = document.getElementById("fuel");
 const shieldEl = document.getElementById("shield");
 const overlay = document.getElementById("overlay");
+const levelNotice = document.getElementById("levelNotice");
 const startButton = document.getElementById("startButton");
 
 const keys = new Set();
@@ -22,6 +24,18 @@ const enemyTypes = [
   { type: "bomber", color: 0x9aa7b2, trim: 0xff5d5d, radius: 2.3, speed: 13, wave: 0.8, score: 90 },
   { type: "interceptor", color: 0xb75cff, trim: 0x63d7ff, radius: 1.35, speed: 24, wave: 2.0, score: 75 },
   { type: "drone", color: 0x5df58f, trim: 0x103524, radius: 1.1, speed: 16, wave: 4.0, score: 70 }
+];
+const levelConfigs = [
+  { level: 1, minScore: 0, spawnInterval: 1.12, enemySpeedMultiplier: 1, tunnelSpeedBonus: 0, fuelDrain: 3.5, itemMin: 4.5, itemMax: 7, enemyWeights: { scout: 48, fighter: 42, bomber: 0, interceptor: 0, drone: 10 } },
+  { level: 2, minScore: 500, spawnInterval: 1.03, enemySpeedMultiplier: 1.06, tunnelSpeedBonus: 2, fuelDrain: 3.6, itemMin: 4.6, itemMax: 7.1, enemyWeights: { scout: 42, fighter: 42, bomber: 4, interceptor: 0, drone: 12 } },
+  { level: 3, minScore: 1000, spawnInterval: 0.92, enemySpeedMultiplier: 1.12, tunnelSpeedBonus: 4, fuelDrain: 3.72, itemMin: 4.8, itemMax: 7.3, enemyWeights: { scout: 33, fighter: 39, bomber: 6, interceptor: 0, drone: 22 } },
+  { level: 4, minScore: 1700, spawnInterval: 0.82, enemySpeedMultiplier: 1.19, tunnelSpeedBonus: 7, fuelDrain: 3.88, itemMin: 5, itemMax: 7.5, enemyWeights: { scout: 28, fighter: 34, bomber: 7, interceptor: 14, drone: 17 } },
+  { level: 5, minScore: 2500, spawnInterval: 0.72, enemySpeedMultiplier: 1.27, tunnelSpeedBonus: 10, fuelDrain: 4.05, itemMin: 5.1, itemMax: 7.8, enemyWeights: { scout: 22, fighter: 31, bomber: 17, interceptor: 15, drone: 15 } },
+  { level: 6, minScore: 3500, spawnInterval: 0.63, enemySpeedMultiplier: 1.35, tunnelSpeedBonus: 13, fuelDrain: 4.22, itemMin: 5.3, itemMax: 8, enemyWeights: { scout: 18, fighter: 29, bomber: 18, interceptor: 18, drone: 17 } },
+  { level: 7, minScore: 4800, spawnInterval: 0.54, enemySpeedMultiplier: 1.44, tunnelSpeedBonus: 16, fuelDrain: 4.42, itemMin: 5.5, itemMax: 8.2, enemyWeights: { scout: 14, fighter: 27, bomber: 18, interceptor: 23, drone: 18 } },
+  { level: 8, minScore: 6300, spawnInterval: 0.47, enemySpeedMultiplier: 1.54, tunnelSpeedBonus: 20, fuelDrain: 4.62, itemMin: 5.8, itemMax: 8.8, enemyWeights: { scout: 12, fighter: 24, bomber: 20, interceptor: 24, drone: 20 } },
+  { level: 9, minScore: 8000, spawnInterval: 0.41, enemySpeedMultiplier: 1.66, tunnelSpeedBonus: 24, fuelDrain: 4.82, itemMin: 5.8, itemMax: 8.9, enemyWeights: { scout: 10, fighter: 24, bomber: 20, interceptor: 26, drone: 20 } },
+  { level: 10, minScore: 10000, spawnInterval: 0.38, enemySpeedMultiplier: 1.78, tunnelSpeedBonus: 28, fuelDrain: 5, itemMin: 5.8, itemMax: 8.8, enemyWeights: { scout: 12, fighter: 22, bomber: 22, interceptor: 22, drone: 22 } }
 ];
 
 let renderer;
@@ -42,6 +56,9 @@ function createGame() {
   return {
     running: false,
     score: 0,
+    level: 1,
+    levelConfig: levelConfigs[0],
+    levelNoticeTimer: 0,
     fuel: 100,
     shield: 0,
     speedBonus: 0,
@@ -242,6 +259,8 @@ function startGame() {
   player.position.set(-4.8, 0, world.playerZ);
   player.rotation.set(0, Math.PI / 2, 0);
   overlay.classList.add("hidden");
+  levelNotice.classList.remove("show");
+  levelNotice.textContent = "LEVEL 1";
   startButton.textContent = "다시 시작";
   cancelAnimationFrame(animationId);
   animationId = requestAnimationFrame(loop);
@@ -275,8 +294,11 @@ function update(dt) {
   const fire = keys.has("Space") || touchControls.has("fire");
 
   game.score += dt * (28 + game.speedBonus);
-  game.fuel -= dt * 3.5;
+  updateLevel();
+  game.fuel -= dt * game.levelConfig.fuelDrain;
   game.speedBonus += dt * 0.9;
+  game.levelNoticeTimer = Math.max(0, game.levelNoticeTimer - dt);
+  levelNotice.classList.toggle("show", game.levelNoticeTimer > 0);
 
   player.position.x += (right - left) * 12 * dt;
   player.position.y += (up - down) * 9 * dt;
@@ -298,11 +320,11 @@ function update(dt) {
   itemClock -= dt;
   if (spawnClock <= 0) {
     spawnEnemy();
-    spawnClock = Math.max(0.32, 1.12 - game.score / 1800);
+    spawnClock = getSpawnInterval();
   }
   if (itemClock <= 0) {
     spawnItem();
-    itemClock = 4.5 + Math.random() * 2.5;
+    itemClock = randomBetween(game.levelConfig.itemMin, game.levelConfig.itemMax);
   }
 
   updateTunnel(dt);
@@ -325,7 +347,7 @@ function update(dt) {
 
 function updateTunnel(dt) {
   for (const ring of game.tunnel) {
-    ring.position.z += (26 + game.speedBonus) * dt;
+    ring.position.z += (26 + game.speedBonus + game.levelConfig.tunnelSpeedBonus) * dt;
     ring.rotation.z += dt * 0.12;
     if (ring.position.z > 16) {
       ring.position.z -= 126;
@@ -346,13 +368,15 @@ function shoot() {
 }
 
 function spawnEnemy() {
-  const template = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+  const template = chooseEnemyType(game.levelConfig.enemyWeights);
   const enemy = makeEnemy(template);
   enemy.position.set(
     (Math.random() * 2 - 1) * world.xLimit,
     (Math.random() * 2 - 1) * world.yLimit,
     world.enemyStartZ - Math.random() * 12
   );
+  enemy.userData.speed *= game.levelConfig.enemySpeedMultiplier;
+  enemy.userData.wave *= 1 + Math.max(0, game.level - 1) * 0.035;
   enemy.rotation.y = Math.PI / 2;
   scene.add(enemy);
   game.enemies.push(enemy);
@@ -393,13 +417,14 @@ function updateEnemies(dt) {
     enemy.rotation.z = Math.sin(data.age * 3) * 0.18;
 
     if (data.type === "interceptor") {
-      enemy.position.x += Math.sign(player.position.x - enemy.position.x) * 4.6 * dt;
-      enemy.position.y += Math.sign(player.position.y - enemy.position.y) * 3.6 * dt;
+      const levelBoost = 1 + Math.max(0, game.level - 1) * 0.045;
+      enemy.position.x += Math.sign(player.position.x - enemy.position.x) * 4.6 * levelBoost * dt;
+      enemy.position.y += Math.sign(player.position.y - enemy.position.y) * 3.6 * levelBoost * dt;
     }
 
     if (data.type === "drone") {
       enemy.rotation.y += dt * 3.5;
-      enemy.position.y += Math.sin(data.age * 5.4) * 3.8 * dt;
+      enemy.position.y += Math.sin(data.age * 5.4) * (3.8 + game.level * 0.14) * dt;
     }
   }
   removeDead(game.enemies, (enemy) => enemy.position.z > 18);
@@ -517,8 +542,78 @@ function resize() {
 
 function updateHud() {
   scoreEl.textContent = Math.floor(game.score);
+  levelEl.textContent = game.level > 10 ? "MAX+" + (game.level - 10) : game.level;
   fuelEl.textContent = Math.max(0, Math.floor(game.fuel));
   shieldEl.textContent = game.shield;
+}
+
+function updateLevel() {
+  const nextLevel = getLevelForScore(game.score);
+  if (nextLevel === game.level) {
+    game.levelConfig = getLevelConfig(nextLevel);
+    return;
+  }
+
+  game.level = nextLevel;
+  game.levelConfig = getLevelConfig(nextLevel);
+  levelNotice.textContent = game.level > 10 ? "LEVEL MAX+" + (game.level - 10) : "LEVEL " + game.level;
+  game.levelNoticeTimer = 1.4;
+}
+
+function getLevelForScore(score) {
+  if (score >= 12500) {
+    return 10 + Math.floor((score - 12500) / 1500) + 1;
+  }
+
+  let level = 1;
+  for (const config of levelConfigs) {
+    if (score >= config.minScore) {
+      level = config.level;
+    }
+  }
+  return level;
+}
+
+function getLevelConfig(level) {
+  if (level <= 10) {
+    return levelConfigs[level - 1];
+  }
+
+  const extra = level - 10;
+  const base = levelConfigs[levelConfigs.length - 1];
+  return {
+    ...base,
+    level,
+    spawnInterval: Math.max(0.28, base.spawnInterval - extra * 0.018),
+    enemySpeedMultiplier: Math.min(2.45, base.enemySpeedMultiplier + extra * 0.08),
+    tunnelSpeedBonus: base.tunnelSpeedBonus + extra * 3,
+    fuelDrain: Math.min(5.8, base.fuelDrain + extra * 0.08),
+    itemMin: Math.min(6.5, base.itemMin + extra * 0.08),
+    itemMax: Math.min(9, base.itemMax + extra * 0.08)
+  };
+}
+
+function getSpawnInterval() {
+  const pressure = Math.min(0.08, game.score / 90000);
+  return Math.max(0.28, game.levelConfig.spawnInterval - pressure);
+}
+
+function chooseEnemyType(weights) {
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  let roll = Math.random() * total;
+
+  for (const template of enemyTypes) {
+    roll -= weights[template.type] || 0;
+    if (roll <= 0) {
+      return template;
+    }
+  }
+
+  return enemyTypes[0];
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
 }
 
 function clamp(value, min, max) {
