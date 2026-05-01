@@ -4,13 +4,18 @@ const bestEl = document.getElementById("best");
 const levelEl = document.getElementById("level");
 const fuelEl = document.getElementById("fuel");
 const shieldEl = document.getElementById("shield");
+const coinsEl = document.getElementById("coins");
 const overlay = document.getElementById("overlay");
 const levelNotice = document.getElementById("levelNotice");
+const upgradeCoinsEl = document.getElementById("upgradeCoins");
+const upgradeGrid = document.getElementById("upgradeGrid");
 const startButton = document.getElementById("startButton");
 
 const keys = new Set();
 const touchControls = new Map();
 const storageKey = "sky-sprint-3d-best";
+const coinsStorageKey = "sky-sprint-3d-coins";
+const upgradesStorageKey = "sky-sprint-3d-upgrades";
 const world = {
   xLimit: 14,
   yLimit: 8,
@@ -37,6 +42,44 @@ const levelConfigs = [
   { level: 9, minScore: 8000, spawnInterval: 0.41, enemySpeedMultiplier: 1.66, tunnelSpeedBonus: 24, fuelDrain: 4.82, itemMin: 5.8, itemMax: 8.9, enemyWeights: { scout: 10, fighter: 24, bomber: 20, interceptor: 26, drone: 20 } },
   { level: 10, minScore: 10000, spawnInterval: 0.38, enemySpeedMultiplier: 1.78, tunnelSpeedBonus: 28, fuelDrain: 5, itemMin: 5.8, itemMax: 8.8, enemyWeights: { scout: 12, fighter: 22, bomber: 22, interceptor: 22, drone: 22 } }
 ];
+const upgradeDefinitions = [
+  {
+    id: "bulletCount",
+    name: "총알 개수 증가",
+    description: "한 번에 발사하는 총알 수가 늘어납니다.",
+    costs: [20, 45, 80, 130, 200],
+    currentText: (level) => `${1 + level}발`,
+    nextText: (level) => `${2 + level}발`
+  },
+  {
+    id: "maxFuel",
+    name: "총 연료량 증가",
+    description: "게임 시작 연료와 최대 연료량이 증가합니다.",
+    costs: [25, 55, 95, 150, 230],
+    currentText: (level) => `${100 + level * 15}`,
+    nextText: (level) => `${100 + (level + 1) * 15}`
+  },
+  {
+    id: "shieldLimit",
+    name: "방어막 유지 시간 증가",
+    description: "보호막 아이템으로 누적 가능한 방어 횟수가 늘어납니다.",
+    costs: [25, 60, 105, 165, 250],
+    currentText: (level) => `${1 + level}회`,
+    nextText: (level) => `${2 + level}회`
+  },
+  {
+    id: "fuelItem",
+    name: "연료 아이템 보충량 증가",
+    description: "연료 아이템을 먹었을 때 회복되는 양이 증가합니다.",
+    costs: [20, 50, 90, 145, 220],
+    currentText: (level) => `+${30 + level * 8}`,
+    nextText: (level) => `+${30 + (level + 1) * 8}`
+  }
+];
+const defaultUpgrades = upgradeDefinitions.reduce((upgrades, upgrade) => {
+  upgrades[upgrade.id] = 0;
+  return upgrades;
+}, {});
 
 let renderer;
 let scene;
@@ -49,18 +92,23 @@ let lastTime = 0;
 let spawnClock = 0;
 let itemClock = 0;
 let game;
+let progress = loadProgress();
 
 bestEl.textContent = best;
 
 function createGame() {
+  const maxFuel = getMaxFuel();
+
   return {
     running: false,
     score: 0,
     level: 1,
     levelConfig: levelConfigs[0],
     levelNoticeTimer: 0,
-    fuel: 100,
+    fuel: maxFuel,
+    maxFuel,
     shield: 0,
+    coins: progress.coins,
     speedBonus: 0,
     bullets: [],
     enemies: [],
@@ -262,6 +310,7 @@ function startGame() {
   levelNotice.classList.remove("show");
   levelNotice.textContent = "LEVEL 1";
   startButton.textContent = "다시 시작";
+  renderUpgradePanel();
   cancelAnimationFrame(animationId);
   animationId = requestAnimationFrame(loop);
 }
@@ -356,15 +405,22 @@ function updateTunnel(dt) {
 }
 
 function shoot() {
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 12, 8),
-    new THREE.MeshBasicMaterial({ color: 0xffe66d })
-  );
-  bullet.position.copy(player.position);
-  bullet.position.z -= 1.8;
-  bullet.userData = { speed: 74, radius: 0.32 };
-  scene.add(bullet);
-  game.bullets.push(bullet);
+  const bulletCount = 1 + progress.upgrades.bulletCount;
+  const spacing = 0.48;
+  const startY = -((bulletCount - 1) * spacing) / 2;
+
+  for (let i = 0; i < bulletCount; i += 1) {
+    const bullet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffe66d })
+    );
+    bullet.position.copy(player.position);
+    bullet.position.y += startY + i * spacing;
+    bullet.position.z -= 1.8;
+    bullet.userData = { speed: 74, radius: 0.32 };
+    scene.add(bullet);
+    game.bullets.push(bullet);
+  }
 }
 
 function spawnEnemy() {
@@ -383,14 +439,31 @@ function spawnEnemy() {
 }
 
 function spawnItem() {
-  const type = Math.random() > 0.38 ? "fuel" : "shield";
+  const type = chooseItemType();
   const item = new THREE.Group();
-  const color = type === "fuel" ? 0x5df58f : 0x63d7ff;
-  const gem = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.92, 0),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.22, metalness: 0.36, emissive: color, emissiveIntensity: 0.22 })
-  );
-  item.add(gem);
+  const color = getItemColor(type);
+
+  if (type === "coin") {
+    const coin = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.72, 0.72, 0.18, 32),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.28, metalness: 0.55, emissive: color, emissiveIntensity: 0.18 })
+    );
+    coin.rotation.x = Math.PI / 2;
+    item.add(coin);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.78, 0.045, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0xfff0a6 })
+    );
+    item.add(ring);
+  } else {
+    const gem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.92, 0),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.22, metalness: 0.36, emissive: color, emissiveIntensity: 0.22 })
+    );
+    item.add(gem);
+  }
+
   item.position.set(
     (Math.random() * 2 - 1) * (world.xLimit - 1),
     (Math.random() * 2 - 1) * (world.yLimit - 1),
@@ -434,7 +507,7 @@ function updateItems(dt) {
   for (const item of game.items) {
     item.position.z += item.userData.speed * dt;
     item.rotation.x += dt * 1.8;
-    item.rotation.y += dt * 2.4;
+    item.rotation.y += item.userData.type === "coin" ? dt * 5.2 : dt * 2.4;
   }
   removeDead(game.items, (item) => item.position.z > 18);
 }
@@ -474,11 +547,16 @@ function checkCollisions() {
     if (item.position.distanceTo(player.position) < item.userData.radius + 1.2) {
       item.userData.dead = true;
       if (item.userData.type === "fuel") {
-        game.fuel = Math.min(100, game.fuel + 30);
-      } else {
-        game.shield = Math.min(3, game.shield + 1);
+        game.fuel = Math.min(game.maxFuel, game.fuel + getFuelItemValue());
+      } else if (item.userData.type === "shield") {
+        game.shield = Math.min(getShieldLimit(), game.shield + 1);
+      } else if (item.userData.type === "coin") {
+        progress.coins += 1;
+        game.coins = progress.coins;
+        saveProgress();
+        renderUpgradePanel();
       }
-      burst(item.position, item.userData.type === "fuel" ? 0x5df58f : 0x63d7ff, 14);
+      burst(item.position, getItemColor(item.userData.type), item.userData.type === "coin" ? 10 : 14);
     }
   }
 
@@ -523,6 +601,7 @@ function endGame() {
   bestEl.textContent = best;
   overlay.querySelector("h1").textContent = "기록 " + Math.floor(game.score);
   overlay.querySelector("p").textContent = Math.floor(game.score) >= best ? "NEW BEST" : "SKY SPRINT 3D";
+  renderUpgradePanel();
   overlay.classList.remove("hidden");
 }
 
@@ -543,8 +622,119 @@ function resize() {
 function updateHud() {
   scoreEl.textContent = Math.floor(game.score);
   levelEl.textContent = game.level > 10 ? "MAX+" + (game.level - 10) : game.level;
-  fuelEl.textContent = Math.max(0, Math.floor(game.fuel));
-  shieldEl.textContent = game.shield;
+  fuelEl.textContent = `${Math.max(0, Math.floor(game.fuel))}/${game.maxFuel}`;
+  shieldEl.textContent = `${game.shield}/${getShieldLimit()}`;
+  coinsEl.textContent = progress.coins;
+}
+
+function loadProgress() {
+  let upgrades = { ...defaultUpgrades };
+
+  try {
+    const savedUpgrades = JSON.parse(localStorage.getItem(upgradesStorageKey) || "{}");
+    upgrades = { ...upgrades, ...savedUpgrades };
+  } catch {
+    upgrades = { ...defaultUpgrades };
+  }
+
+  for (const upgrade of upgradeDefinitions) {
+    upgrades[upgrade.id] = clamp(Number(upgrades[upgrade.id]) || 0, 0, upgrade.costs.length);
+  }
+
+  return {
+    coins: Math.max(0, Number(localStorage.getItem(coinsStorageKey) || 0)),
+    upgrades
+  };
+}
+
+function saveProgress() {
+  localStorage.setItem(coinsStorageKey, String(progress.coins));
+  localStorage.setItem(upgradesStorageKey, JSON.stringify(progress.upgrades));
+}
+
+function buyUpgrade(id) {
+  const upgrade = upgradeDefinitions.find((item) => item.id === id);
+  if (!upgrade) {
+    return;
+  }
+
+  const level = progress.upgrades[id];
+  const cost = upgrade.costs[level];
+  if (level >= upgrade.costs.length || progress.coins < cost) {
+    return;
+  }
+
+  progress.coins -= cost;
+  progress.upgrades[id] += 1;
+  saveProgress();
+
+  game.maxFuel = getMaxFuel();
+  game.fuel = game.running ? Math.min(game.fuel, game.maxFuel) : game.maxFuel;
+  game.shield = Math.min(game.shield, getShieldLimit());
+  game.coins = progress.coins;
+
+  renderUpgradePanel();
+  updateHud();
+}
+
+function renderUpgradePanel() {
+  upgradeCoinsEl.textContent = progress.coins;
+  upgradeGrid.innerHTML = "";
+
+  for (const upgrade of upgradeDefinitions) {
+    const level = progress.upgrades[upgrade.id];
+    const maxLevel = upgrade.costs.length;
+    const isMax = level >= maxLevel;
+    const cost = isMax ? 0 : upgrade.costs[level];
+    const canBuy = !isMax && progress.coins >= cost;
+    const card = document.createElement("article");
+    card.className = "upgrade-card";
+    card.innerHTML = `
+      <h2>${upgrade.name}</h2>
+      <p>${upgrade.description}</p>
+      <div class="upgrade-meta">
+        <span>Lv.${level}/${maxLevel}</span>
+        <span>${isMax ? "최대" : `${upgrade.currentText(level)} → ${upgrade.nextText(level)}`}</span>
+      </div>
+      <button type="button" data-upgrade="${upgrade.id}" ${canBuy ? "" : "disabled"}>
+        ${isMax ? "완료" : `${cost} 코인`}
+      </button>
+    `;
+    upgradeGrid.appendChild(card);
+  }
+}
+
+function getMaxFuel() {
+  return 100 + progress.upgrades.maxFuel * 15;
+}
+
+function getFuelItemValue() {
+  return 30 + progress.upgrades.fuelItem * 8;
+}
+
+function getShieldLimit() {
+  return 1 + progress.upgrades.shieldLimit;
+}
+
+function chooseItemType() {
+  const roll = Math.random();
+  if (roll < 0.45) {
+    return "coin";
+  }
+
+  if (roll < 0.83) {
+    return "fuel";
+  }
+
+  return "shield";
+}
+
+function getItemColor(type) {
+  if (type === "coin") {
+    return 0xffd24a;
+  }
+
+  return type === "fuel" ? 0x5df58f : 0x63d7ff;
 }
 
 function updateLevel() {
@@ -654,6 +844,15 @@ document.querySelectorAll("[data-control]").forEach((button) => {
   button.addEventListener("pointerleave", release);
 });
 
+upgradeGrid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-upgrade]");
+  if (!button) {
+    return;
+  }
+
+  buyUpgrade(button.dataset.upgrade);
+});
+
 window.addEventListener("blur", () => {
   touchControls.clear();
   document.querySelectorAll("[data-control].active").forEach((button) => {
@@ -666,5 +865,6 @@ window.addEventListener("resize", resize);
 
 game = createGame();
 init3D();
+renderUpgradePanel();
 updateHud();
 render();

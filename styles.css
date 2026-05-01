@@ -7,6 +7,7 @@
   --muted: #9fb6c9;
   --accent: #36d1ff;
   --danger: #ff5d5d;
+  --coin: #ffd24a;
 }
 
 * {
@@ -44,7 +45,7 @@ button {
 
 .hud {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -91,10 +92,11 @@ canvas {
   inset: 0;
   display: grid;
   place-content: center;
-  gap: 22px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px;
   text-align: center;
   background: linear-gradient(rgba(3, 10, 18, 0.18), rgba(3, 10, 18, 0.72));
+  overflow: auto;
 }
 
 .overlay.hidden {
@@ -135,9 +137,94 @@ canvas {
 .title-block h1 {
   margin: 0;
   max-width: min(92vw, 920px);
-  font-size: clamp(28px, 7vw, 76px);
+  font-size: clamp(28px, 6vw, 68px);
   line-height: 1.08;
   overflow-wrap: break-word;
+}
+
+.upgrade-panel {
+  width: min(92vw, 760px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(5, 18, 30, 0.78);
+  padding: 12px;
+  text-align: left;
+  backdrop-filter: blur(10px);
+}
+
+.upgrade-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.upgrade-head strong {
+  font-size: 16px;
+}
+
+.upgrade-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.upgrade-head b {
+  color: var(--coin);
+  font-size: 18px;
+}
+
+.upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.upgrade-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.upgrade-card h2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.upgrade-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.upgrade-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #dceefa;
+  font-size: 12px;
+}
+
+.upgrade-card button {
+  height: 34px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #03101a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.upgrade-card button:disabled {
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(237, 247, 255, 0.48);
 }
 
 #startButton {
@@ -232,7 +319,66 @@ canvas {
   }
 
   .title-block h1 {
-    font-size: clamp(26px, 8vw, 34px);
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .overlay {
+    align-content: start;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .title-block p {
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .upgrade-panel {
+    width: min(100%, 520px);
+    max-height: 38vh;
+    overflow: auto;
+    padding: 10px;
+  }
+
+  .upgrade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .upgrade-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px 8px;
+    padding: 8px;
+  }
+
+  .upgrade-card h2 {
+    font-size: 13px;
+  }
+
+  .upgrade-card p {
+    font-size: 11px;
+  }
+
+  .upgrade-meta {
+    font-size: 11px;
+  }
+
+  .upgrade-card h2,
+  .upgrade-card p,
+  .upgrade-meta {
+    grid-column: 1;
+  }
+
+  .upgrade-card button {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    width: 76px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  #startButton {
+    height: 44px;
   }
 }
 
