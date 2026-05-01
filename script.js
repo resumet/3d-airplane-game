@@ -9,6 +9,7 @@ const overlay = document.getElementById("overlay");
 const levelNotice = document.getElementById("levelNotice");
 const upgradeCoinsEl = document.getElementById("upgradeCoins");
 const upgradeGrid = document.getElementById("upgradeGrid");
+const devCoinButton = document.getElementById("devCoinButton");
 const startButton = document.getElementById("startButton");
 
 const keys = new Set();
@@ -677,6 +678,14 @@ function buyUpgrade(id) {
   updateHud();
 }
 
+function addDeveloperCoins() {
+  progress.coins += 100;
+  game.coins = progress.coins;
+  saveProgress();
+  renderUpgradePanel();
+  updateHud();
+}
+
 function renderUpgradePanel() {
   upgradeCoinsEl.textContent = progress.coins;
   upgradeGrid.innerHTML = "";
@@ -852,6 +861,8 @@ upgradeGrid.addEventListener("click", (event) => {
 
   buyUpgrade(button.dataset.upgrade);
 });
+
+devCoinButton.addEventListener("click", addDeveloperCoins);
 
 window.addEventListener("blur", () => {
   touchControls.clear();
