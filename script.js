@@ -638,11 +638,13 @@ document.querySelectorAll("[data-control]").forEach((button) => {
   const control = button.dataset.control;
   const press = (event) => {
     event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
     touchControls.set(control, true);
     button.classList.add("active");
   };
   const release = (event) => {
     event.preventDefault();
+    button.releasePointerCapture?.(event.pointerId);
     touchControls.delete(control);
     button.classList.remove("active");
   };
@@ -650,6 +652,13 @@ document.querySelectorAll("[data-control]").forEach((button) => {
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
   button.addEventListener("pointerleave", release);
+});
+
+window.addEventListener("blur", () => {
+  touchControls.clear();
+  document.querySelectorAll("[data-control].active").forEach((button) => {
+    button.classList.remove("active");
+  });
 });
 
 startButton.addEventListener("click", startGame);
