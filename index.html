@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Sprint 3D</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell">
+    <section class="hud" aria-label="게임 상태">
+      <div>
+        <span>점수</span>
+        <strong id="score">0</strong>
+      </div>
+      <div>
+        <span>최고</span>
+        <strong id="best">0</strong>
+      </div>
+      <div>
+        <span>연료</span>
+        <strong id="fuel">100</strong>
+      </div>
+      <div>
+        <span>보호막</span>
+        <strong id="shield">0</strong>
+      </div>
+    </section>
+
+    <section class="stage-wrap">
+      <canvas id="game" aria-label="3D 비행기 게임"></canvas>
+      <div id="overlay" class="overlay">
+        <div class="title-block">
+          <p>SKY SPRINT 3D</p>
+          <h1>입체 하늘길을 열어라</h1>
+        </div>
+        <button id="startButton" type="button">시작</button>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="게임 조작">
+      <button type="button" data-control="left" aria-label="왼쪽">◀</button>
+      <button type="button" data-control="up" aria-label="위">▲</button>
+      <button type="button" data-control="down" aria-label="아래">▼</button>
+      <button type="button" data-control="right" aria-label="오른쪽">▶</button>
+      <button type="button" data-control="fire" class="fire" aria-label="발사">●</button>
+    </section>
+  </main>
+
+  <script src="three.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
